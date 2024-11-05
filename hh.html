@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<!-- Declares the document type as HTML5 -->
+<html lang="en">
+<!-- Opens the HTML document and sets the language to English -->
+<head>
+    <!-- Head section contains meta-information about the document -->
+    <meta charset="UTF-8">
+    <!-- Sets the character encoding to UTF-8 -->
+    <title>Interactive Particle Captcha with Timer</title>
+    <!-- Sets the title of the webpage -->
+    <style>
+        /* CSS Styles Section */
+
+        /* Styles for the body and html elements */
+        body, html {
+            margin: 0; /* Removes default margin */
+            padding: 0; /* Removes default padding */
+            overflow: hidden; /* Hides overflow content */
+            background: #000; /* Sets background color to black */
+            user-select: none; /* Prevents text selection /pip install captcha
+
+        }
+
+        /* Styles for the canvas element */
+        canvas {
+            display: block; /* Makes the canvas a block-level element */
+        }
+
+        /* Styles for the question and hint container */
+        #question {
+            position: absolute; /* Positions the element absolutely */
+            top: 10px; /* 10px from the top */
+            left: 50%; /* Centers horizontally */
+            transform: translateX(-50%); /* Adjusts horizontal positioning */
+            color: #fff; /* Sets text color to white */
+            font-family: Arial, sans-serif; /* Sets font family */
+            font-size: 18px; /* Reduced font size */
+            text-align: center; /* Centers text */
+            z-index: 1; /* Sets stacking order */
+        }
+
+        /* Styles for the hint text */
+        #hint {
+            color: #00f; /* Sets hint color to blue */
+            margin-left: 10px; /* Adds left margin */
+            position: relative; /* Sets position to relative */
+            font-size: 16px; /* Reduced font size */
+        }
+
+        /* Styles for the hint box containing the SVG */
+        #hint .hint-box {
+            position: relative; /* Sets position to relative */
+            display: inline-block; /* Displays as inline-block */
+            width: 20px; /* Reduced width */
+            height: 20px; /* Reduced height */
+            margin-left: 5px; /* Adds left margin */
+            background: #fff; /* Sets background color to white */
+            box-sizing: border-box; /* Includes padding and border in width and height */
+        }
+
+        /* Styles for the timer display */
+        #timer {
+            margin-top: 50px; /* Adds top margin to separate from question */
+            color: #ff0000; /* Sets text color to red */
+            font-family: Arial, sans-serif; /* Sets font family */
+            font-size: 14px; /* Reduced font size */
+            text-align: center; /* Centers text */
+            z-index: 1; /* Sets stacking order */
+        }
+
+        /* Styles for the result message */
+        #result {
+            color: #ff0000; /* Sets text color to red */
+            font-family: Arial, sans-serif; /* Sets font family */
+            font-size: 24px; /* Reduced font size */
+            text-align: center; /* Centers text */
+            z-index: 2; /* Sets stacking order above other elements */
+            display: none; /* Hides the element by default */
+        }
+
+        /* Styles for the input container */
+        #inputContainer {
+            position: absolute; /* Positions the element absolutely */
+            bottom: 20px; /* 20px from the bottom */
+            left: 50%; /* Centers horizontally */
+            transform: translateX(-50%); /* Adjusts horizontal positioning */
+            z-index: 1; /* Sets stacking order */
+        }
+
+        /* Styles for the captcha input field */
+        #captchaInput {
+            padding: 8px; /* Reduced padding */
+            font-size: 14px; /* Reduced font size */
+            width: 180px; /* Reduced width */
+        }
+
+        /* Styles for the submit button */
+        #submitButton {
+            padding: 8px; /* Reduced padding */
+            font-size: 16px; /* Reduced font size */
+            cursor: pointer; /* Changes cursor to pointer on hover */
+        }
+    </style>
+</head>
+<body>
+    <!-- Body Section -->
+
+    <!-- Question and Hint Container -->
+    <div id="question">Question: ""</div>
+    <span id="hint">Hint: ""</span>
+
+    <!-- Timer Display positioned under the question -->
+    <div id="timer">Time Left: <span id="time">30
+    </span> seconds</div>
+
+    <!-- Result Message Container -->
+    <div id="result"></div>
+
+    <!-- Input Field and Submit Button Container -->
+    <div id="inputContainer">
+        <input type="text" id="captchaInput" placeholder="Enter Captcha">
+        <!-- Input field for user to enter captcha -->
+        <button id="submitButton">Submit</button>
+        <!-- Button to submit the captcha -->
+    </div>
+
+    <!-- Canvas for Particle Animation -->
+    <canvas id="canvas"></canvas>
+
+    <!-- JavaScript Section -->
+    <script>
+    (function() {
+        // Self-invoking function to encapsulate the captcha logic
+
+        // Get the canvas element by its ID
+        var canvas = document.getElementById('canvas');
+        // Get the 2D drawing context from the canvas
+        var ctx = canvas.getContext('2d');
+        // Declare variables for canvas dimensions
+        var width, height;
+        // Initialize an array to hold particle objects
+        var particles = [];
+        // Initialize mouse position to an off-screen value
+        var mouse = { x: -9999, y: -9999 };
+        // Array of possible captcha texts
+        var questions = [
+            {
+                question: "What is the object on the screen?",
+                hint: "Hint: B",
+                options: ["CHAIR", "PURPLE", "BANANA"],
+                correctAnswer: "CHAIR"
+            },
+            {
+                question: "What is the color on the screen?",
+                hint: "Hint: B",
+                options: ["BAKLAVA", "YELLOW", "AMERICA"],
+                correctAnswer: "YELLOW"
+            },
+            {
+                question: "What animal is do you see?",
+                hint: "Hint: S",
+                options: ["SUSHI", "LIZARD", "OCEAN"],
+                correctAnswer: "LIZARD"
+            }
+        ];
+
+        var selectedQuestionIndex = Math.floor(Math.random() * questions.length);
+        var selectedQuestion = questions[selectedQuestionIndex];
+        var texts = selectedQuestion.options;
+        // Variable to store font size based on canvas size
+        var fontSize;
+        // Form factor used to interpolate between texts based on mouse position
+        var formFactor = 0; // Ranges from 0 to 2, interpolates between texts[0], texts[1], and texts[2]
+        // Array of fonts for dynamic font changes
+        var fonts = ['Arial', 'Courier New', 'Verdana', 'Georgia', 'Times New Roman'];
+
+        // Get references to DOM elements for result message and input controls
+        var resultMessage = document.getElementById('result');
+        var captchaInput = document.getElementById('captchaInput');
+        var submitButton = document.getElementById('submitButton');
+
+        // Timer variables
+        var timerElement = document.getElementById('time'); // Reference to the timer display
+        var timeLeft = 30; // Time limit in seconds
+        var timerInterval; // Variable to hold the timer interval ID
+
+        // Max tries variables
+        var maxTries = 3;
+        var attempts = 0;
+
+        /**
+         * Function to resize the canvas based on window size
+         * Sets the canvas width and height to match the window's dimensions
+         * Calculates the font size and initializes particles accordingly
+         */
+        function resizeCanvas() {
+            width = canvas.width = window.innerWidth; // Set canvas width to window width
+            height = canvas.height = window.innerHeight; // Set canvas height to window height
+            fontSize = Math.min(width, height) * 0.2; // Calculate font size as 20% of the smaller dimension
+            initializeParticles(); // Initialize particles after resizing
+        }
+
+        // Add event listener to handle window resize
+        window.addEventListener('resize', resizeCanvas);
+        // Initial call to set up the canvas size and particles
+        resizeCanvas();
+
+        /**
+         * Event listener to track mouse movement over the window
+         * Updates mouse coordinates and formFactor based on mouse X position
+         */
+        window.addEventListener('mousemove', function(e) {
+            mouse.x = e.clientX; // Update mouse x-coordinate
+            mouse.y = e.clientY; // Update mouse y-coordinate
+            formFactor = (mouse.x / width) * 2; // Update formFactor to range from 0 to 2 to include all three texts
+        });
+
+        /**
+         * Event listener to handle mouse leaving the window
+         * Resets mouse coordinates to off-screen values
+         */
+        window.addEventListener('mouseout', function() {
+            mouse.x = -9999; // Reset mouse x-coordinate
+            mouse.y = -9999; // Reset mouse y-coordinate
+        });
+
+        /**
+         * Particle constructor function
+         * Initializes particle properties including position, velocity, acceleration, friction, and color
+         */
+        function Particle() {
+            this.x = Math.random() * width; // Initialize particle's x-position randomly
+            this.y = Math.random() * height; // Initialize particle's y-position randomly
+            this.destinations = []; // Array to hold destination positions for each text
+            this.vx = (Math.random() - 0.5) * 10; // Initialize x-velocity with random value
+            this.vy = (Math.random() - 0.5) * 10; // Initialize y-velocity with random value
+            this.accX = 0; // Initialize x-acceleration
+            this.accY = 0; // Initialize y-acceleration
+            this.friction = Math.random() * 0.05 + 0.9; // Initialize friction factor
+            this.color = 'white'; // Set particle color to white
+        }
+
+        /**
+         * Render method for Particle prototype
+         * Handles particle movement, interaction with mouse, and drawing on the canvas
+         */
+        Particle.prototype.render = function() {
+            // Calculate interpolated destination based on formFactor
+            var destX;
+            if (formFactor <= 1) {
+                destX = (1 - formFactor) * this.destinations[0].x + formFactor * this.destinations[1].x;
+            } else {
+                destX = (2 - formFactor) * this.destinations[1].x + (formFactor - 1) * this.destinations[2].x;
+            }
+            var destY;
+            if (formFactor <= 1) {
+                destY = (1 - formFactor) * this.destinations[0].y + formFactor * this.destinations[1].y;
+            } else {
+                destY = (2 - formFactor) * this.destinations[1].y + (formFactor - 1) * this.destinations[2].y;
+            }
+
+            // Calculate acceleration towards the destination
+            this.accX = (destX - this.x) / 500;
+            this.accY = (destY - this.y) / 500;
+            // Update velocity with acceleration
+            this.vx += this.accX;
+            this.vy += this.accY;
+            // Apply friction to velocity
+            this.vx *= this.friction;
+            this.vy *= this.friction;
+
+            // Update particle position based on velocity
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // Calculate distance between particle and mouse
+            var dx = this.x - mouse.x;
+            var dy = this.y - mouse.y;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+
+            // If within interaction radius, adjust acceleration away from mouse
+            if (distance < 100) { // Interaction radius
+                this.accX = (this.x - mouse.x) / 20;
+                this.accY = (this.y - mouse.y) / 20;
+                this.vx += this.accX;
+                this.vy += this.accY;
+            }
+
+            // Draw the particle as a small circle
+            ctx.fillStyle = this.color; // Set fill color
+            ctx.beginPath(); // Begin drawing path
+            ctx.arc(this.x, this.y, 2, 0, Math.PI * 2, true); // Draw arc for the particle
+            ctx.closePath(); // Close the path
+            ctx.fill(); // Fill the particle with color
+        };
+
+        /**
+         * Function to initialize particles based on the selected texts
+         * Maps text pixels to particle destinations and creates particle instances
+         */
+        document.getElementById('question').innerText = selectedQuestion.question;
+        document.getElementById('hint').innerText = selectedQuestion.hint;
+
+        function initializeParticles() {
+            particles = []; // Reset particles array
+            var positionsArray = []; // Array to hold positions for each text
+
+            // Loop through each text to calculate particle positions
+            for (var t = 0; t < texts.length; t++) {
+                ctx.clearRect(0, 0, width, height); // Clear the canvas
+                ctx.font = 'bold ' + fontSize + 'px ' + fonts[Math.floor(Math.random() * fonts.length)]; // Set random font style and size
+                ctx.textAlign = 'center'; // Center the text
+                ctx.fillStyle = 'white'; // Set text color to white
+                ctx.fillText(texts[t], width / 2, height / 2 + fontSize / 3); // Draw the text on the canvas
+
+                var imageData = ctx.getImageData(0, 0, width, height).data; // Get pixel data of the canvas
+                var positions = []; // Array to hold positions where pixels are opaque
+
+                // Sample pixels every 5px to find positions with text
+                for (var y = 0; y < height; y += 5) {
+                    for (var x = 0; x < width; x += 5) {
+                        var index = (x + y * width) * 4; // Calculate the index for the pixel
+                        if (imageData[index + 3] > 128) { // Check alpha value to determine opacity
+                            positions.push({ x: x, y: y }); // Add position to the array if opaque
+                        }
+                    }
+                }
+                positionsArray.push(positions); // Add positions of current text to the array
+            }
+            ctx.clearRect(0, 0, width, height); // Clear the canvas after processing
+
+            // Determine the maximum number of particles needed based on texts
+            var maxParticles = Math.max(positionsArray[0].length, positionsArray[1].length, positionsArray[2].length);
+
+            // Create particles and assign their destinations for each text
+            for (var i = 0; i < maxParticles; i++) {
+                var particle = new Particle(); // Create a new particle
+                particle.destinations = []; // Initialize destinations array
+
+                for (var t = 0; t < texts.length; t++) { // Assign destinations for each text
+                    var positions = positionsArray[t]; // Get positions for current text
+                    var pos = positions[i % positions.length]; // Loop positions if not enough
+                    particle.destinations.push({
+                        x: pos.x + (Math.random() - 0.5) * width * 0.01, // Slight random offset in x
+                        y: pos.y + (Math.random() - 0.5) * height * 0.01 // Slight random offset in y
+                    });
+                }
+
+                particles.push(particle); // Add the particle to the particles array
+            }
+        }
+
+        /**
+         * Animation loop to render particles continuously
+         * Clears the canvas and renders each particle on every frame
+         */
+        function animate() {
+            ctx.clearRect(0, 0, width, height); // Clear the canvas before each frame
+            drawNoise(); // Add noise effect
+            for (var i = 0; i < particles.length; i++) { // Loop through all particles
+                particles[i].render(); // Render each particle
+            }
+
+            requestAnimationFrame(animate); // Request the next animation frame
+        }
+
+        /**
+         * Function to draw random noise on the canvas
+         */
+        function drawNoise() {
+            for (let i = 0; i < 50; i++) {
+                ctx.fillStyle = 'rgba(255, 255, 255, ' + Math.random() + ')';
+                ctx.beginPath();
+                ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 3, 0, Math.PI * 2, true);
+                ctx.fill();
+            }
+        }
+
+        /**
+         * Function to check if the entered captcha is correct
+         * Compares user input with the selected captcha text and displays appropriate message
+         */
+        function checkCaptcha() {
+            var userInput = captchaInput.value.trim().toUpperCase(); // Get and sanitize user input
+            if (userInput === selectedQuestion.correctAnswer) {
+                resultMessage.innerText = 'Correct Answer! Captcha Solved Successfully!';
+                resultMessage.style.display = 'block';
+                clearInterval(timerInterval); // Stop the timer
+            } else {
+                attempts++; // Increment the attempts counter
+                if (attempts >= maxTries) {
+                    resultMessage.innerText = 'Incorrect Answer. Maximum attempts reached. Please reload the page.';
+                    resultMessage.style.display = 'block';
+                    submitButton.disabled = true; // Disable the submit button
+                    captchaInput.disabled = true; // Disable the input field
+                    clearInterval(timerInterval); // Stop the timer
+                } else {
+                    resultMessage.innerText = 'Incorrect Answer. Try Again. Attempts left: ' + (maxTries - attempts);
+                    resultMessage.style.display = 'block';
+                }
+            }
+        }
+
+        /**
+         * Event listener for the submit button click
+         * Calls the captcha check function when the button is clicked
+         */
+        submitButton.onclick = function() {
+            checkCaptcha(); // Call the captcha check function when button is clicked
+        };
+
+        /**
+         * Function to start the countdown timer
+         * Updates the timer display every second and handles timeout conditions
+         */
+        function startTimer() {
+            timerInterval = setInterval(function() { // Set interval to decrement timer every second
+                timeLeft--; // Decrement time left
+                timerElement.textContent = timeLeft; // Update the timer display
+                if (timeLeft <= 0) { // If time runs out
+                    clearInterval(timerInterval); // Stop the timer
+                    resultMessage.innerText = 'Time is up! Captcha not solved.'; // Display timeout message
+                    resultMessage.style.display = 'block'; // Show the result message
+                    submitButton.disabled = true; // Disable the submit button
+                    captchaInput.disabled = true; // Disable the input field
+                }
+            }, 1000); // Interval set to 1000 milliseconds (1 second)
+        }
+
+        // Initialize particles, start animation, and begin the timer
+        initializeParticles(); // Initialize particles based on selected texts
+        animate(); // Start the animation loop
+        startTimer(); // Begin the countdown timer
+    })();
+    </script>
+</body>
+</html>
